@@ -1,14 +1,25 @@
 var net = require('net');
 var MoloTcpPack = require("./molo_tcp_pack")
 
+var MOLO_APP = require("./molo_client_app")
+var RemoteSession = require("./remote_session")
+
+var config = require("./config.json")
+
+var os = require('os');
+const process = require('process');
+
+var CLIENT_STATUS_UNBINDED = "unbinded"
+var CLIENT_STATUS_BINDED = "binded"
+
 class MolohubClient {
-    constructor(host, port) {
-        this.host = host;
-        this.port = port;
+    constructor(rhost, rport, lhost, lport) {
+        this.rhost = rhost;
+        this.rport = rport;
         this.client = null;
         this.clientid = "";
-        this.lhost = "127.0.0.1";
-        this.lport = 8123;
+        this.lhost = lhost;
+        this.lport = lport;
         this.moloTcpPack = new MoloTcpPack();
     }
 
@@ -17,19 +28,18 @@ class MolohubClient {
         this.appendRecvBuffer = null;
         this.appendSendBuffer = null;
         this.appendConnect = true;
-        this.clientStatus = null;
+        this.clientStatus = CLIENT_STATUS_UNBINDED;
     }
     
    
     sendRawPack(rawData) {
         if (this.appendConnect)
             return;
-
         this.client.write(rawData);
     }
     
     sendDickPack(dictData) {
-        console.log('sendDickPack ' + dictData.toString());
+        console.log('sendDickPack ' + JSON.stringify(dictData));
         if (this.appendConnect)
             return;
         var body = this.moloTcpPack.generatorTcpBuffer(dictData);
@@ -41,26 +51,28 @@ class MolohubClient {
         this.appendConnect = false;
         bodyData['Type'] = 'Auth';
         bodyData['Payload'] = {};
-        bodyData['Payload']['OS'] = 'testOS';
-        bodyData['Payload']['PyVersion'] = 'testPyVersion';
+        bodyData['Payload']['OS'] = os.platform() + "_" + os.arch() + "_" + os.release();
+        bodyData['Payload']['PyVersion'] = process.version; //TODO: node version
         bodyData['Payload']['App'] = 'MolohubNodeJs';
-        bodyData['Payload']['MacAddr'] = 'testMac';
-        bodyData['Payload']['LocalSeed'] = '123456';
+        bodyData['Payload']['MacAddr'] = 'testMac'; //TODO:
 
-        //var tcpBuffer = moloTcpPack.generatorTcpBuffer(bodyData);
-
-        //console.log('onConnected, send authdata ' + tcpBuffer.toString('hex'));
+        //TODO: fisrt time generate random id, then save it, after that, use saved localseed
+        bodyData['Payload']['LocalSeed'] =  Math.random().toString(36).substr(2);
        this.sendDickPack(bodyData);
     }
 
     onDisconnect(hadError) {
-        console.log('onDisconnect ' + hadError.toString());
+        console.log('onDisconnect ' + String(hadError));
         this.clear();
     }
 
     onRecvData(data) {
         try {
-            this.appendRecvBuffer = Buffer.concat(this.appendRecvBuffer, data);
+            if(this.appendRecvBuffer && this.appendRecvBuffer.length>0)
+                this.appendRecvBuffer = Buffer.concat(this.appendRecvBuffer, data);
+            else 
+                this.appendRecvBuffer = data;
+
             this.processMoloTcpPack();
         }
         catch(e) {
@@ -73,7 +85,7 @@ class MolohubClient {
     sockConnect() {
         this.clear();
         this.client = new net.Socket();
-        this.client.connect(this.port, this.host, this.onConnected.bind(this));
+        this.client.connect(this.rport, this.rhost, this.onConnected.bind(this));
         this.client.on('data', this.onRecvData.bind(this));
         this.client.on('end', this.onDisconnect.bind(this));
     }
@@ -82,10 +94,10 @@ class MolohubClient {
         var ret = true;
 
         while(ret) {
-            ret = this.moloTcpPack.recvBuffer(self.appendRecvBuffer);
+            ret = this.moloTcpPack.recvBuffer(this.appendRecvBuffer);
             if (ret && this.moloTcpPack.errCode == MoloTcpPack.ERR_OK)
                 this.processJsonPack(this.moloTcpPack.bodyJData);
-            self.appendRecvBuffer = this.moloTcpPack.tmpBuff;
+            this.appendRecvBuffer = this.moloTcpPack.tmpBuff;
             if (this.moloTcpPack.errCode == MoloTcpPack.ERR_MALFORMED) {
                 console.log("tcp pack malformed!!");
                 this.client.close();
@@ -94,16 +106,34 @@ class MolohubClient {
     }
 
     processJsonPack(jdata) {
+        console.log('processJsonPack: ' + JSON.stringify(jdata));
+
         var protocolType = jdata['Type'];
         if (protocolType == 'AuthResp')
             this.onAuthResp(jdata);
-        else if (protocolType == 'Pong')
-            this.onPong(jdata);
+        else if (protocolType == 'NewTunnel')
+            this.onNewTunnel(jdata);
+        else if(protocolType == 'TokenExpired')
+            this.onTokenExpired(jdata);
+        else if(protocolType == 'BindStatus')
+            this.onBindStatus(jdata);
+        else if(protocolType == 'ReqProxy')
+            this.onReqProxy(jdata);
     }
 
 
+    sendPing() {
+        var payload = {};
+        payload['Token'] = this.token;
+        payload['Status'] = this.clientStatus;
+        var bodyData = {}
+        bodyData['Payload'] = payload;
+        bodyData['Type'] = 'Ping';
+        this.sendDickPack(bodyData);
+    }
+
     onAuthResp(jdata) {
-        this.clientid = jdata['ClientId'];
+        this.clientid = jdata['Payload']['ClientId'];
         var payload = {};
         payload['ReqId'] = 1;
         payload['MacAddr'] = 'testMacAddr';
@@ -112,15 +142,48 @@ class MolohubClient {
         var bodyData = {}
         bodyData['Payload'] = payload;
         bodyData['Type'] = 'ReqTunnel';
+        console.log('clienid: ' + this.clientid);
+        console.log('payload: ' + JSON.stringify(payload));
         this.sendDickPack(bodyData);
-
     }
 
+    onNewTunnel(jdata) {
+        this.token = jdata['Payload']['token'];
+        console.log('!!!login succeed clientid:' + this.clientid + " token:" + this.token);
+
+         //online config, such as markdown template
+         var onlineConfig = jdata['OnlineConfig'];
+         //TODO: process markdown template stuff
+
+        this.onBindStatus(jdata);
+    }
+
+    onBindStatus(jdata) {
+        var payload = jdata['Payload']
+        this.clientStatus = payload['Status'];
+        payload['token'] = this.token;
+        //TODO update client status to ui by markdown
+    }
+
+    onUnBindAuth(jdata) {
+        //TODO update to ui by markdown
+    }
+
+    /*
     onPong(jdata) {
-        console.log("onPong " + jdata.toString());
+        //console.log("onPong " + jdata.toString());
+    }*/
+    
+    onTokenExpired(jdata) {
+        // token expired, update a new one.
+        this.token = jdata['Payload']['token'];
     }
 
-
-    
+    onReqProxy(jdata) {
+        //TODO new remote session to build new tunnel
+        var remoteSession = new RemoteSession(this.clientid,this.rhost, this.rport, this.lhost, this.lport);
+        remoteSession.sockConnect();
+    }
 }
+
 module.exports = MolohubClient;
