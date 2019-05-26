@@ -1,0 +1,32 @@
+{
+  "name": "molohub",
+  "version": "0.0.1",
+  "description": "reverse proxy component for smarthome platform",
+  "main": "build/index.js",
+  "scripts": {
+    "prebuild": "rimraf ./build",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/haoctopus/molohub-nodejs.git"
+  },
+  "keywords": [
+    "reverse-proxy",
+    "smarthome",
+    "homeassistant",
+    "iobroker"
+  ],
+  "author": "yulongying",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/haoctopus/molohub-nodejs/issues"
+  },
+  "homepage": "https://github.com/haoctopus/molohub-nodejs#readme",
+  "devDependencies": {
+    "@types/node": "^12.0.2",
+    "rimraf": "^2.6.3",
+    "typescript": "^3.4.5"
+  }
+}
