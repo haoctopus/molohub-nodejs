@@ -10,116 +10,81 @@ export interface MoloTcpBodyData {
     OnlineConfig?: string;
 };
 
-export function recvBuffer(buf: Buffer, callback: (err: string|null, data?: MoloTcpBodyData) => void) {
+export function recvBuffer(buf: Buffer, callback: (err: string|null, data?: MoloTcpBodyData, leftBuf?: Buffer) => void) {
     let headerLen: number = 0;
     let magic: string = "";
     let headerJData: Record<string,any> = {};
     let bodyLen: number = 0;
     let bodyJData: MoloTcpBodyData = {};
 
-    function hasRecvedHeaderPrefix() {
-        return headerLen != 0 && magic.length > 0;
-    }
-
     function recvHeaderPrefix(buf: Buffer) {
-        if (!buf || buf.length < HEADER_PREFIX_EN)
-            return false;
+        if (!buf || buf.length < HEADER_PREFIX_EN) return "Incomplete";
         magic = buf.slice(0, MAGIC_LEN).toString()
-
-        if (magic != MOLO_TCP_MAGIC) {
-            console.log("wrong tcp header magic " + magic);
-            return false;
-        }
+        if (magic != MOLO_TCP_MAGIC) return "wrong tcp header magic " + magic;
         headerLen = buf.readUInt32LE(MAGIC_LEN);
-        return true;
-    }
-
-    function hasRecvedHeader() {
-        return JSON.stringify(headerJData) !== "{}";
+        return null;
     }
 
     function recvHeader(buf: Buffer) {
-        if (!buf || buf.length < headerLen)
-            return false;
+        if (!buf || buf.length < headerLen) return "Incomplete";
         try {
             headerJData = JSON.parse(buf.slice(0, headerLen).toString());
         } catch (e) {
-            console.log("MoloTcpPack recv header error");
-            return false;
+            return "MoloTcpPack recv header error" + e.message;
         }
-        return true;
-    }
-
-    function hasRecvedBodyLen() {
-        return bodyLen != 0;
+        return null;
     }
 
     function recvBodyLen(buf: Buffer) {
-        if (!buf || buf.length < PACK_LEN_SIZE)
-            return false;
+        if (!buf || buf.length < PACK_LEN_SIZE) return "Incomplete";
         bodyLen = buf.readUInt32LE(0);
-        return true;
-    }
-
-    function hasRecvedBody() {
-        return JSON.stringify(bodyJData) !== "{}";
+        return null;
     }
 
     function recvBody(buf: Buffer) {
-        if (!buf || buf.length < bodyLen)
-            return false;
-
+        if (!buf || buf.length < bodyLen) return "Incomplete";
         try {
             bodyJData = JSON.parse(buf.slice(0, bodyLen).toString());
         } catch (e) {
-            console.log("MoloTcpPack recv body error");
-            return false;
+            return "MoloTcpPack recv body error" + e.message;
         }
-        return true;
+        return null;
     }
 
     if (!buf) {
         callback("Empty Buffer");
-        return false;
     }
-    let ret = false;
+    let ret: string|null;
 
-    if (!hasRecvedHeaderPrefix()) {
-        ret = recvHeaderPrefix(buf);
-        if (!ret) {
-            callback("Invalid Header Prefix");
-            return ret;
-        }
-        buf = buf.slice(HEADER_PREFIX_EN, buf.length);
+    ret = recvHeaderPrefix(buf);
+    if (ret) {
+        callback(ret);
+        return
     }
+    buf = buf.slice(HEADER_PREFIX_EN, buf.length);
 
-    if (!hasRecvedHeader()) {
-        ret = recvHeader(buf);
-        if (!ret) {
-            callback("Invalid Header");
-            return ret;
-        }
-        buf = buf.slice(headerLen, buf.length);
+    ret = recvHeader(buf);
+    if (ret) {
+        callback(ret);
+        return;
     }
+    buf = buf.slice(headerLen, buf.length);
 
-    if (!hasRecvedBodyLen()) {
-        ret = recvBodyLen(buf);
-        if (!ret) {
-            callback("Invalid Body Length");
-            return ret;
-        }
-        buf = buf.slice(PACK_LEN_SIZE, buf.length);
+    ret = recvBodyLen(buf);
+    if (ret) {
+        callback(ret);
+        return;
     }
+    buf = buf.slice(PACK_LEN_SIZE, buf.length);
 
-    if (!hasRecvedBody()) {
-        ret = recvBody(buf);
-        if (!ret) {
-            callback("Invalid Body");
-            return ret;
-        }
+    ret = recvBody(buf);
+    if (ret) {
+        callback(ret);
+        return;
     }
-    callback(null, bodyJData);
-    return true;
+    buf = buf.slice(bodyLen, buf.length);
+
+    callback(null, bodyJData, buf);
 }
 
 export function generatorTcpBuffer(bodyJData: Record<string, any>) {

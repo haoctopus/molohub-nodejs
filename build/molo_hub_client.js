@@ -27,9 +27,12 @@ var MolohubClient = /** @class */ (function () {
         this.lhost = lhost;
         this.lport = lport;
     }
-    MolohubClient.prototype.clear = function () {
+    MolohubClient.prototype.clearChunks = function () {
         this.chunks = [];
         this.chunksSize = 0;
+    };
+    MolohubClient.prototype.clear = function () {
+        this.clearChunks();
         this.clientStatus = CLIENT_STATUS_UNBINDED;
     };
     MolohubClient.prototype.sendRawPack = function (rawData) {
@@ -38,7 +41,7 @@ var MolohubClient = /** @class */ (function () {
         }
     };
     MolohubClient.prototype.sendDickPack = function (dictData) {
-        console.log('sendDickPack ' + JSON.stringify(dictData));
+        console.log('CLIENT: sendDickPack body: ' + JSON.stringify(dictData));
         var body = molo_tcp_pack_1.generatorTcpBuffer(dictData);
         this.sendRawPack(body);
     };
@@ -47,6 +50,7 @@ var MolohubClient = /** @class */ (function () {
         this.clear();
         this.client = new net.Socket();
         this.client.connect(this.rport, this.rhost, function () {
+            console.log("on client connect");
             var bodyData = {};
             bodyData['Type'] = 'Auth';
             bodyData['Payload'] = {};
@@ -61,26 +65,39 @@ var MolohubClient = /** @class */ (function () {
         this.client.on('data', function (data) {
             _this.chunks.push(data);
             _this.chunksSize += data.length;
+            try {
+                // TODO: Make more efficient.
+                var buf = Buffer.concat(_this.chunks, _this.chunksSize);
+                molo_tcp_pack_1.recvBuffer(buf, function (err, bodyJData, leftBuf) {
+                    if (err === "Incomplete") {
+                        // Do nothing, just wait message complete.
+                        return;
+                    }
+                    else if (err) {
+                        console.log("CLIENT: receiveData: Invalid message: " + err);
+                        _this.clearChunks();
+                    }
+                    else {
+                        if (bodyJData) {
+                            _this.processJsonPack(bodyJData);
+                        }
+                        if (leftBuf) {
+                            _this.clearChunks();
+                            _this.chunks.push(leftBuf);
+                            _this.chunksSize += leftBuf.length;
+                        }
+                    }
+                });
+            }
+            catch (e) {
+                // Error while process message, drop all chunks.
+                console.log("CLIENT: receiveData: Process crash: " + e.message);
+                _this.clearChunks();
+            }
         });
         this.client.on('end', function () {
-            var buf = Buffer.concat(_this.chunks, _this.chunksSize);
-            _this.processMoloTcpPack(buf);
             console.log('onDisconnect');
             _this.clear();
-        });
-    };
-    MolohubClient.prototype.processMoloTcpPack = function (buf) {
-        var _this = this;
-        molo_tcp_pack_1.recvBuffer(buf, function (err, bodyJData) {
-            if (err) {
-                console.log("tcp pack error: " + err);
-                if (_this.client) {
-                    _this.client.destroy();
-                }
-            }
-            else if (bodyJData) {
-                _this.processJsonPack(bodyJData);
-            }
         });
     };
     MolohubClient.prototype.processJsonPack = function (jdata) {

@@ -31,9 +31,12 @@ export class MolohubClient {
         this.lport = lport;
     }
 
-    clear() {
+    private clearChunks() {
         this.chunks = [];
         this.chunksSize = 0;
+    }
+    private clear() {
+        this.clearChunks();
         this.clientStatus = CLIENT_STATUS_UNBINDED;
     }
 
@@ -44,7 +47,7 @@ export class MolohubClient {
     }
 
     private sendDickPack(dictData: Record<string, any>) {
-        console.log('sendDickPack ' + JSON.stringify(dictData));
+        console.log('CLIENT: sendDickPack body: ' + JSON.stringify(dictData));
         var body = generatorTcpBuffer(dictData);
         this.sendRawPack(body);
     }
@@ -53,6 +56,7 @@ export class MolohubClient {
         this.clear();
         this.client = new net.Socket();
         this.client.connect(this.rport, this.rhost, () => {
+            console.log("on client connect");
             var bodyData: Record<string, any> = {}
             bodyData['Type'] = 'Auth';
             bodyData['Payload'] = {};
@@ -68,25 +72,37 @@ export class MolohubClient {
         this.client.on('data', (data: Buffer) => {
             this.chunks.push(data);
             this.chunksSize += data.length;
+
+            try {
+                // TODO: Make more efficient.
+                const buf = Buffer.concat(this.chunks, this.chunksSize);
+                recvBuffer(buf, (err, bodyJData, leftBuf) => {
+                    if (err === "Incomplete") {
+                        // Do nothing, just wait message complete.
+                        return;
+                    } else if (err) {
+                        console.log(`CLIENT: receiveData: Invalid message: ${err}`);
+                        this.clearChunks();
+                    } else {
+                        if (bodyJData) {
+                            this.processJsonPack(bodyJData);
+                        }
+                        if (leftBuf) {
+                            this.clearChunks();
+                            this.chunks.push(leftBuf);
+                            this.chunksSize += leftBuf.length;
+                        }
+                    }
+                });
+            } catch (e) {
+                // Error while process message, drop all chunks.
+                console.log(`CLIENT: receiveData: Process crash: ${e.message}`);
+                this.clearChunks();
+            }
         });
         this.client.on('end', () => {
-            const buf = Buffer.concat(this.chunks, this.chunksSize);
-            this.processMoloTcpPack(buf);
             console.log('onDisconnect');
             this.clear();
-        });
-    }
-
-    private processMoloTcpPack(buf: Buffer) {
-        recvBuffer(buf, (err, bodyJData) => {
-            if (err) {
-                console.log(`tcp pack error: ${err}`);
-                if (this.client) {
-                    this.client.destroy();
-                }
-            } else if (bodyJData) {
-                this.processJsonPack(bodyJData);
-            }
         });
     }
 
