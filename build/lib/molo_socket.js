@@ -25,14 +25,17 @@ var events_1 = require("events");
 var molo_tcp_pack_1 = require("../molo_tcp_pack");
 var MoloSocket = /** @class */ (function (_super) {
     __extends(MoloSocket, _super);
-    function MoloSocket(host, port) {
+    function MoloSocket(host, port, name) {
         var _this = _super.call(this) || this;
+        _this.name = "";
         /** Socket connect to remote */
         _this.chunks = [];
         _this.chunksSize = 0;
         _this.transparency = false;
         _this.host = host;
         _this.port = port;
+        if (name)
+            _this.name = name;
         return _this;
     }
     MoloSocket.prototype.clearChunks = function () {
@@ -51,19 +54,20 @@ var MoloSocket = /** @class */ (function (_super) {
         }
     };
     MoloSocket.prototype.send = function (dictData) {
-        console.log('sendDickPack body: ' + JSON.stringify(dictData));
+        console.log(this.name + ' sendDickPack body: ' + JSON.stringify(dictData));
         var body = molo_tcp_pack_1.generatorTcpBuffer(dictData);
         this.sendRaw(body);
     };
     MoloSocket.prototype.connect = function () {
         var _this = this;
-        this.clear();
+        this.clearChunks();
         this.client = new net.Socket();
         this.client.on('connect', function () {
             _this.emit("connect");
         });
         this.client.on('data', function (data) {
             if (_this.transparency) {
+                // In transparency mode, don't handle rawData.
                 _this.emit("data", undefined, data);
                 return;
             }
@@ -71,19 +75,21 @@ var MoloSocket = /** @class */ (function (_super) {
             _this.chunksSize += data.length;
             try {
                 // TODO: Make more efficient.
-                var buf = Buffer.concat(_this.chunks, _this.chunksSize);
-                molo_tcp_pack_1.recvBuffer(buf, function (err, bodyJData, leftBuf) {
+                var buf_1 = Buffer.concat(_this.chunks, _this.chunksSize);
+                molo_tcp_pack_1.recvBuffer(buf_1, function (err, bodyJData, leftBuf) {
                     if (err === "Incomplete") {
                         // Do nothing, just wait message complete.
                         return;
                     }
                     else if (err) {
-                        console.log("receiveData: Invalid message: " + err);
+                        console.log(_this.name + " receiveData: Invalid message: " + err);
+                        console.log(_this.name + " RawData: " + buf_1.toString());
                         _this.clearChunks();
                     }
                     else {
                         if (bodyJData) {
-                            _this.emit("data", bodyJData);
+                            // Molo command is processed. transmit left buffer to callback.
+                            _this.emit("data", bodyJData, leftBuf);
                         }
                         if (leftBuf) {
                             _this.clearChunks();
@@ -95,17 +101,17 @@ var MoloSocket = /** @class */ (function (_super) {
             }
             catch (e) {
                 // Error while process message, drop all chunks.
-                console.log("receiveData: Process crash: " + e.message);
+                console.log(_this.name + " receiveData: Process crash: " + e.message);
                 _this.clearChunks();
             }
         });
         this.client.on('end', function () {
-            console.log('onDisconnect');
+            console.log(_this.name + " onDisconnect");
             _this.clear();
             _this.emit("end");
         });
         this.client.on('error', function (err) {
-            console.log(err.message);
+            console.log(_this.name + " Error: " + err.message);
         });
         this.client.connect(this.port, this.host);
     };
@@ -117,10 +123,6 @@ var MoloSocket = /** @class */ (function (_super) {
         }
     };
     MoloSocket.prototype.setTransparency = function (enable) {
-        if (enable)
-            console.log("socket set to transparent");
-        else
-            console.log("socket set to untransparent");
         this.transparency = enable;
     };
     return MoloSocket;

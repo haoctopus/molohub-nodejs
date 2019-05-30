@@ -5,17 +5,20 @@ import { recvBuffer, generatorTcpBuffer } from "../molo_tcp_pack";
 export class MoloSocket extends EventEmitter {
     private host: string;
     private port: number;
+    private name: string = "";
     /** Socket connect to remote */
     private chunks: Buffer[] = [];
     private chunksSize: number = 0;
     private client?: net.Socket;
     private transparency: boolean = false;
 
-    public constructor(host: string, port: number) {
+    public constructor(host: string, port: number, name?: string) {
         super();
 
         this.host = host;
         this.port = port;
+        if (name)
+            this.name = name;
     }
 
     private clearChunks() {
@@ -36,19 +39,20 @@ export class MoloSocket extends EventEmitter {
     }
 
     public send(dictData: Record<string, any>) {
-        console.log('sendDickPack body: ' + JSON.stringify(dictData));
+        console.log(this.name + ' sendDickPack body: ' + JSON.stringify(dictData));
         const body = generatorTcpBuffer(dictData);
         this.sendRaw(body);
     }
 
     public connect() {
-        this.clear();
+        this.clearChunks();
         this.client = new net.Socket();
         this.client.on('connect', () => {
             this.emit("connect");
         })
         this.client.on('data', (data: Buffer) => {
             if (this.transparency) {
+                // In transparency mode, don't handle rawData.
                 this.emit("data", undefined, data);
                 return;
             }
@@ -64,11 +68,13 @@ export class MoloSocket extends EventEmitter {
                         // Do nothing, just wait message complete.
                         return;
                     } else if (err) {
-                        console.log(`receiveData: Invalid message: ${err}`);
+                        console.log(`${this.name} receiveData: Invalid message: ${err}`);
+                        console.log(`${this.name} RawData: ${buf.toString()}`);
                         this.clearChunks();
                     } else {
                         if (bodyJData) {
-                            this.emit("data", bodyJData);
+                            // Molo command is processed. transmit left buffer to callback.
+                            this.emit("data", bodyJData, leftBuf);
                         }
                         if (leftBuf) {
                             this.clearChunks();
@@ -79,17 +85,17 @@ export class MoloSocket extends EventEmitter {
                 });
             } catch (e) {
                 // Error while process message, drop all chunks.
-                console.log(`receiveData: Process crash: ${e.message}`);
+                console.log(`${this.name} receiveData: Process crash: ${e.message}`);
                 this.clearChunks();
             }
         });
         this.client.on('end', () => {
-            console.log('onDisconnect');
+            console.log(`${this.name} onDisconnect`);
             this.clear();
             this.emit("end");
         });
         this.client.on('error', (err) => {
-            console.log(err.message);
+            console.log(`${this.name} Error: ${err.message}`);
         });
         this.client.connect(this.port, this.host);
     }
@@ -103,10 +109,6 @@ export class MoloSocket extends EventEmitter {
     }
 
     public setTransparency(enable: boolean) {
-        if (enable)
-            console.log("socket set to transparent");
-        else
-            console.log("socket set to untransparent");
         this.transparency = enable;
     }
 }

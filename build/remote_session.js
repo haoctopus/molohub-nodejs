@@ -30,13 +30,12 @@ var RemoteSession = /** @class */ (function (_super) {
         return _this;
     }
     RemoteSession.prototype.sendRaw = function (rawData) {
-        console.log("remote send raw");
         if (this.client)
             this.client.sendRaw(rawData);
     };
     RemoteSession.prototype.sockConnect = function () {
         var _this = this;
-        this.client = new molo_socket_1.MoloSocket(this.rhost, this.rport);
+        this.client = new molo_socket_1.MoloSocket(this.rhost, this.rport, "RemoteSession");
         this.client.connect();
         this.client.on("connect", function () {
             var bodyData = {};
@@ -48,7 +47,7 @@ var RemoteSession = /** @class */ (function (_super) {
         });
         this.client.on("data", function (data, rawData) {
             if (data) {
-                _this.processJsonPack(data);
+                _this.processJsonPack(data, rawData);
             }
             else {
                 console.log("remote rece raw");
@@ -70,22 +69,25 @@ var RemoteSession = /** @class */ (function (_super) {
             this.client = undefined;
         }
     };
-    RemoteSession.prototype.processJsonPack = function (jdata) {
+    RemoteSession.prototype.processJsonPack = function (jdata, leftData) {
         console.log('remote session processJsonPack: ' + JSON.stringify(jdata));
         var protocolType = jdata['Type'];
         if (protocolType == 'StartProxy')
-            this.onStartProxy();
+            this.onStartProxy(leftData);
     };
-    RemoteSession.prototype.onStartProxy = function () {
+    RemoteSession.prototype.onStartProxy = function (rawData) {
         var _this = this;
         var local = new local_session_1.LocalSession(this.lhost, this.lport);
         local.on("add", function (localID, localSess) {
             _this.emit("add", localID, localSess, _this.id, _this);
         });
+        local.on("connect", function () {
+            if (_this.client) {
+                _this.client.setTransparency(true);
+            }
+            _this.processTransparencyPack(rawData);
+        });
         local.sockConnect();
-        if (this.client)
-            this.client.setTransparency(true);
-        //this.processTransparencyPack();
     };
     RemoteSession.prototype.processTransparencyPack = function (buf) {
         var localSession = molo_client_app_1.remoteID2LocalSess(this.id);

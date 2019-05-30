@@ -26,21 +26,15 @@ var LocalSession = /** @class */ (function (_super) {
         return _this;
     }
     LocalSession.prototype.sendRaw = function (rawData) {
-        console.log("local send raw");
         if (this.client)
             this.client.sendRaw(rawData);
     };
     LocalSession.prototype.sockConnect = function () {
         var _this = this;
-        this.client = new molo_socket_1.MoloSocket(this.host, this.port);
-        this.client.connect();
-        this.client.on("connect", function () {
-            if (_this.client)
-                _this.client.setTransparency(true);
-        });
+        this.client = new molo_socket_1.MoloSocket(this.host, this.port, "LocolSession");
+        this.client.setTransparency(true);
         this.client.on("data", function (_, rawData) {
             if (rawData) {
-                console.log("locol send raw");
                 _this.processTransparencyPack(rawData);
             }
         });
@@ -52,7 +46,11 @@ var LocalSession = /** @class */ (function (_super) {
                 molo_client_app_1.breakSessionPair(_this.id);
             }
         });
-        this.emit("add", this.id, this);
+        this.client.on("connect", function () {
+            _this.emit("add", _this.id, _this);
+            _this.emit("connect");
+        });
+        this.client.connect();
     };
     LocalSession.prototype.sockClose = function () {
         if (this.client)

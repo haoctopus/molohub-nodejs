@@ -17,19 +17,14 @@ export class LocalSession extends EventEmitter {
     }
 
     public sendRaw(rawData: Buffer) {
-        console.log("local send raw");
         if (this.client) this.client.sendRaw(rawData);
     }
 
     public sockConnect() {
-        this.client = new MoloSocket(this.host, this.port);
-        this.client.connect();
-        this.client.on("connect", () => {
-            if (this.client) this.client.setTransparency(true);
-        })
+        this.client = new MoloSocket(this.host, this.port, "LocolSession");
+        this.client.setTransparency(true);
         this.client.on("data", (_, rawData: Buffer|undefined) => {
             if (rawData) {
-                console.log("locol send raw");
                 this.processTransparencyPack(rawData);
             }
         });
@@ -41,7 +36,11 @@ export class LocalSession extends EventEmitter {
                 breakSessionPair(this.id);
             }
         });
-        this.emit("add", this.id, this);
+        this.client.on("connect", () => {
+            this.emit("add", this.id, this);
+            this.emit("connect");
+        });
+        this.client.connect();
     }
 
     public sockClose() {

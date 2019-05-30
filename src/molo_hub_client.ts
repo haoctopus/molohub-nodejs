@@ -35,7 +35,7 @@ export class MolohubClient {
 
     public sockConnect() {
         this.clear();
-        this.client = new MoloSocket(this.rhost, this.rport);
+        this.client = new MoloSocket(this.rhost, this.rport, "Client");
         this.client.connect()
         this.client.on("connect", () => {
             console.log("on client connect");

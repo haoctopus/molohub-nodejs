@@ -26,12 +26,11 @@ export class RemoteSession extends EventEmitter {
     }
 
     public sendRaw(rawData: Buffer) {
-        console.log("remote send raw");
         if (this.client) this.client.sendRaw(rawData);
     }
 
     public sockConnect() {
-        this.client = new MoloSocket(this.rhost, this.rport);
+        this.client = new MoloSocket(this.rhost, this.rport, "RemoteSession");
         this.client.connect()
         this.client.on("connect", () => {
             const bodyData: Record<string, any> = {}
@@ -42,7 +41,7 @@ export class RemoteSession extends EventEmitter {
         });
         this.client.on("data", (data: MoloTcpBodyData|undefined, rawData: Buffer) => {
             if (data) {
-                this.processJsonPack(data);
+                this.processJsonPack(data, rawData);
             } else {
                 console.log("remote rece raw");
                 this.processTransparencyPack(rawData);
@@ -65,22 +64,26 @@ export class RemoteSession extends EventEmitter {
         }
     }
 
-    private processJsonPack(jdata: MoloTcpBodyData) {
+    private processJsonPack(jdata: MoloTcpBodyData, leftData: Buffer) {
         console.log('remote session processJsonPack: ' + JSON.stringify(jdata));
 
         const protocolType = jdata['Type'];
         if (protocolType == 'StartProxy')
-            this.onStartProxy();
+            this.onStartProxy(leftData);
     }
 
-    private onStartProxy() {
+    private onStartProxy(rawData: Buffer) {
         const local = new LocalSession(this.lhost, this.lport);
         local.on("add", (localID: string, localSess: LocalSession) => {
             this.emit("add", localID, localSess, this.id, this);
-        })
+        });
+        local.on("connect", () => {
+            if (this.client) {
+                this.client.setTransparency(true);
+            }
+            this.processTransparencyPack(rawData);
+        });
         local.sockConnect();
-        if (this.client) this.client.setTransparency(true);
-        //this.processTransparencyPack();
     }
 
     private processTransparencyPack(buf: Buffer) {

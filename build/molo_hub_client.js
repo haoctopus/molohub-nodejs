@@ -30,7 +30,7 @@ var MolohubClient = /** @class */ (function () {
     MolohubClient.prototype.sockConnect = function () {
         var _this = this;
         this.clear();
-        this.client = new molo_socket_1.MoloSocket(this.rhost, this.rport);
+        this.client = new molo_socket_1.MoloSocket(this.rhost, this.rport, "Client");
         this.client.connect();
         this.client.on("connect", function () {
             console.log("on client connect");
