@@ -1,9 +1,9 @@
-import * as net from "net";
 import { EventEmitter } from "events";
 
-import { recvBuffer, MoloTcpBodyData, generatorTcpBuffer } from "./molo_tcp_pack";
+import { MoloTcpBodyData } from "./molo_tcp_pack";
 import { genUniqueId, remoteID2LocalSess, breakSessionPair } from "./molo_client_app";
 import { LocalSession } from "./local_session";
+import { MoloSocket } from "./lib/molo_socket";
 
 export class RemoteSession extends EventEmitter {
     private clientid:string;
@@ -11,18 +11,13 @@ export class RemoteSession extends EventEmitter {
     private rport: number;
     private lhost: string;
     private lport: number;
-    private id: string;
-    private token: string = "";
+    private id: string = genUniqueId();
     /** Socket connect to remote */
-    private client?: net.Socket;
-    private chunks: Buffer[] = [];
-    private chunksSize: number = 0;
-    private transparency: boolean = false;
+    private client?: MoloSocket;
 
-    constructor(clientid: string, rhost: string, rport: number, lhost: string, lport: number) {
+    public constructor(clientid: string, rhost: string, rport: number, lhost: string, lport: number) {
         super();
 
-        this.id = genUniqueId();
         this.clientid = clientid;
         this.rhost = rhost;
         this.rport = rport;
@@ -30,53 +25,32 @@ export class RemoteSession extends EventEmitter {
         this.lport = lport;
     }
 
-    clear() {
-        this.chunks = [];
-        this.chunksSize = 0;
-        this.transparency = false;
+    public sendRaw(rawData: Buffer) {
+        console.log("remote send raw");
+        if (this.client) this.client.sendRaw(rawData);
     }
 
-
-    sendRawPack(rawData: Buffer) {
-        if (this.client) {
-            this.client.write(rawData);
-        }
-    }
-
-    sendDickPack(dictData: Record<string, any>) {
-        console.log('sendDickPack ' + JSON.stringify(dictData));
-        var body = generatorTcpBuffer(dictData);
-        this.sendRawPack(body);
-    }
-
-    sockConnect() {
-        this.clear();
-        this.client = new net.Socket();
-        this.client.connect(this.rport, this.rhost, () => {
-            var bodyData: Record<string, any> = {}
+    public sockConnect() {
+        this.client = new MoloSocket(this.rhost, this.rport);
+        this.client.connect()
+        this.client.on("connect", () => {
+            const bodyData: Record<string, any> = {}
             bodyData['Type'] = 'RegProxy';
             bodyData['Payload'] = {};
             bodyData['Payload']['ClientId'] = this.clientid;
-    
-            //var tcpBuffer = generatorTcpBuffer(bodyData);
-    
-            //console.log('onConnected, send authdata ' + tcpBuffer.toString('hex'));
-            this.sendDickPack(bodyData);
+            if (this.client) this.client.send(bodyData);
         });
-        this.client.on('data', (data: Buffer) => {
-            this.chunks.push(data);
-            this.chunksSize += data.length;
-        });
-        this.client.on('end', () => {
-            const buf = Buffer.concat(this.chunks, this.chunksSize);
-            if (this.transparency) {
-                this.processTransparencyPack(buf);
+        this.client.on("data", (data: MoloTcpBodyData|undefined, rawData: Buffer) => {
+            if (data) {
+                this.processJsonPack(data);
             } else {
-                this.processMoloTcpPack(buf);
+                console.log("remote rece raw");
+                this.processTransparencyPack(rawData);
             }
-            console.log('RemoteSession onDisconnect');
-            this.clear();
-            var localSession = remoteID2LocalSess(this.id);
+        });
+        this.client.on("end", () => {
+            console.log("RemoteSession onDisconnect");
+            const localSession = remoteID2LocalSess(this.id);
             if (localSession) {
                 localSession.sockClose();
                 breakSessionPair(this.id);
@@ -84,28 +58,17 @@ export class RemoteSession extends EventEmitter {
         });
     }
 
-    sockClose() {
-        if (this.client)
+    public sockClose() {
+        if (this.client) {
             this.client.destroy();
-    }
-
-    private processMoloTcpPack(buf: Buffer) {
-        recvBuffer(buf, (err, bodyJData) => {
-            if (err) {
-                console.log(`tcp pack error: ${err}`);
-                if (this.client) {
-                    this.client.destroy();
-                }
-            } else if (bodyJData) {
-                this.processJsonPack(bodyJData);
-            }
-        });
+            this.client = undefined;
+        }
     }
 
     private processJsonPack(jdata: MoloTcpBodyData) {
         console.log('remote session processJsonPack: ' + JSON.stringify(jdata));
 
-        var protocolType = jdata['Type'];
+        const protocolType = jdata['Type'];
         if (protocolType == 'StartProxy')
             this.onStartProxy();
     }
@@ -116,19 +79,17 @@ export class RemoteSession extends EventEmitter {
             this.emit("add", localID, localSess, this.id, this);
         })
         local.sockConnect();
-        this.transparency = true;
-        this.processTransparencyPack();
+        if (this.client) this.client.setTransparency(true);
+        //this.processTransparencyPack();
     }
 
-    processTransparencyPack(buf?: Buffer) {
-        var localSession = remoteID2LocalSess(this.id);
+    private processTransparencyPack(buf: Buffer) {
+        const localSession = remoteID2LocalSess(this.id);
         if (!localSession) {
             console.log('processTransparencyPack() localsession session not found');
             this.sockClose();
             return;
         }
-        if (buf) {
-            localSession.sendRawPack(buf);
-        }
+        localSession.sendRaw(buf);
     }
 }

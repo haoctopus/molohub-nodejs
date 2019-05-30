@@ -12,9 +12,6 @@ export class MoloClientApp {
 
     public constructor(client: MolohubClient) {
         this.client = client;
-        setInterval(() => {
-            this.client.sendPing();
-        }, 5000);
     }
 
     public runReverseProxy() {
@@ -30,6 +27,7 @@ export function genUniqueId() {
 }
 
 export function newSessionPair(localID: string, localSess: LocalSession, remoteID: string, remoteSess: RemoteSession) {
+    console.log(`New session pair: Local=${localID}, Remote=${remoteID}`);
     localSessionDict[remoteID] = localSess;
     remoteSessionDict[localID] = remoteSess;
 }

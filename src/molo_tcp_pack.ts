@@ -88,17 +88,17 @@ export function recvBuffer(buf: Buffer, callback: (err: string|null, data?: Molo
 }
 
 export function generatorTcpBuffer(bodyJData: Record<string, any>) {
-    var headerJData: Record<string, any> = {};
+    const headerJData: Record<string, any> = {};
     headerJData["ver"] = PACK_VERSION;
-    var headerJdataBuffer = Buffer.from(JSON.stringify(headerJData), "utf8");
-    var headerJdataBufferLen = Buffer.alloc(PACK_LEN_SIZE);
+    const headerJdataBuffer = Buffer.from(JSON.stringify(headerJData), "utf8");
+    const headerJdataBufferLen = Buffer.alloc(PACK_LEN_SIZE);
     headerJdataBufferLen.writeUInt32LE(headerJdataBuffer.length, 0);
-    var headerBuff = Buffer.concat([Buffer.from(MOLO_TCP_MAGIC, "utf8"), headerJdataBufferLen, headerJdataBuffer]);
+    const headerBuff = Buffer.concat([Buffer.from(MOLO_TCP_MAGIC, "utf8"), headerJdataBufferLen, headerJdataBuffer]);
 
-    var bodyJdataBuffer = Buffer.from(JSON.stringify(bodyJData), "utf8");
-    var bodyJdataBufferLen = Buffer.alloc(PACK_LEN_SIZE);
+    const bodyJdataBuffer = Buffer.from(JSON.stringify(bodyJData), "utf8");
+    const bodyJdataBufferLen = Buffer.alloc(PACK_LEN_SIZE);
 
     bodyJdataBufferLen.writeUInt32LE(bodyJdataBuffer.length, 0);
-    var tcpBufer = Buffer.concat([headerBuff, bodyJdataBufferLen, bodyJdataBuffer]);
+    const tcpBufer = Buffer.concat([headerBuff, bodyJdataBufferLen, bodyJdataBuffer]);
     return tcpBufer;
 }

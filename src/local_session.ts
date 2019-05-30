@@ -1,59 +1,41 @@
-import * as net from "net";
 import { EventEmitter } from "events";
 
 import { genUniqueId, localID2RemoteSess, breakSessionPair } from "./molo_client_app";
+import { MoloSocket } from "./lib/molo_socket";
 
 export class LocalSession extends EventEmitter {
-    public id: string;
+    private id: string = genUniqueId();
     private host: string;
     private port: number;
-    private appendConnect: boolean = true;
-    private chunks: Buffer[] = [];
-    private chunksSize: number = 0;
-    private client?: net.Socket;
+    private client?: MoloSocket;
 
-    constructor(host: string, port: number) {
+    public constructor(host: string, port: number) {
         super();
 
-        this.id = genUniqueId();
         this.host = host;
         this.port = port;
     }
 
-    clear() {
-        this.appendConnect = true;
-        this.chunks = [];
-        this.chunksSize = 0;
+    public sendRaw(rawData: Buffer) {
+        console.log("local send raw");
+        if (this.client) this.client.sendRaw(rawData);
     }
 
-
-    sendRawPack(rawData: Buffer) {
-        if (this.client) {
-            this.client.write(rawData);
-        }
-    }
-
-    sockConnect() {
-        this.clear();
-        this.client = new net.Socket();
-        this.client.connect(this.port, this.host, () => {
-            this.appendConnect = false;
-        });
-        this.client.on('data', (data: Buffer) => {
-            this.chunks.push(data);
-            this.chunksSize += data.length;
-        });
-        this.client.on('end', () => {
-            const buf = Buffer.concat(this.chunks, this.chunksSize);
-            var remoteSession = localID2RemoteSess(this.id);
-            if (!remoteSession) {
-                console.log("LocalSession remote session not found");
-                this.sockClose();
-                return;
+    public sockConnect() {
+        this.client = new MoloSocket(this.host, this.port);
+        this.client.connect();
+        this.client.on("connect", () => {
+            if (this.client) this.client.setTransparency(true);
+        })
+        this.client.on("data", (_, rawData: Buffer|undefined) => {
+            if (rawData) {
+                console.log("locol send raw");
+                this.processTransparencyPack(rawData);
             }
-            remoteSession.sendRawPack(buf);
-            this.clear();
-            var remoteSession = localID2RemoteSess(this.id);
+        });
+        this.client.on("end", () => {
+            console.log("LocalSession onDisconnect");
+            const remoteSession = localID2RemoteSess(this.id);
             if (remoteSession) {
                 remoteSession.sockClose();
                 breakSessionPair(this.id);
@@ -62,8 +44,18 @@ export class LocalSession extends EventEmitter {
         this.emit("add", this.id, this);
     }
 
-    sockClose() {
+    public sockClose() {
         if (this.client)
             this.client.destroy();
+    }
+
+    private processTransparencyPack(buf: Buffer) {
+        const remoteSession = localID2RemoteSess(this.id);
+        if (!remoteSession) {
+            console.log('processTransparencyPack() remoteSession session not found');
+            this.sockClose();
+            return;
+        }
+        remoteSession.sendRaw(buf);
     }
 }

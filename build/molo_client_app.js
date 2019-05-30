@@ -6,11 +6,7 @@ var localSessionDict = {};
 var remoteSessionDict = {};
 var MoloClientApp = /** @class */ (function () {
     function MoloClientApp(client) {
-        var _this = this;
         this.client = client;
-        setInterval(function () {
-            _this.client.sendPing();
-        }, 5000);
     }
     MoloClientApp.prototype.runReverseProxy = function () {
         this.client.sockConnect();
@@ -26,6 +22,7 @@ function genUniqueId() {
 }
 exports.genUniqueId = genUniqueId;
 function newSessionPair(localID, localSess, remoteID, remoteSess) {
+    console.log("New session pair: Local=" + localID + ", Remote=" + remoteID);
     localSessionDict[remoteID] = localSess;
     remoteSessionDict[localID] = remoteSess;
 }
