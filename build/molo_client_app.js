@@ -4,6 +4,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var localSessionDict = {};
 /** localID to remote session */
 var remoteSessionDict = {};
+function dumpPairs() {
+    console.log("Current Session Pairs:");
+    console.log("LocalSession number: " + Object.keys(localSessionDict).length + " RemoteSession number: " + Object.keys(remoteSessionDict).length);
+    var i = 1;
+    for (var remoteID in localSessionDict) {
+        var localSession = localSessionDict[remoteID];
+        var localID = localSession.id;
+        var remoteSession = remoteSessionDict[localID];
+        console.log(i + ": " + localSession.dumpInfo() + " " + remoteSession.dumpInfo());
+        i++;
+    }
+}
 var MoloClientApp = /** @class */ (function () {
     function MoloClientApp(client) {
         this.client = client;
@@ -25,6 +37,7 @@ function newSessionPair(localID, localSess, remoteID, remoteSess) {
     console.log("New session pair: Local=" + localID + ", Remote=" + remoteID);
     localSessionDict[remoteID] = localSess;
     remoteSessionDict[localID] = remoteSess;
+    dumpPairs();
 }
 exports.newSessionPair = newSessionPair;
 function remoteID2LocalSess(remoteID) {
@@ -37,10 +50,27 @@ function localID2RemoteSess(localID) {
 exports.localID2RemoteSess = localID2RemoteSess;
 function breakSessionPair(ID) {
     if (localSessionDict[ID]) {
-        delete localSessionDict[ID];
+        console.log("Del session pair triggered from Remote");
+        var localID = localSessionDict[ID].id;
+        if (remoteSessionDict[localID]) {
+            delete remoteSessionDict[localID];
+            delete localSessionDict[ID];
+        }
+        else {
+            console.log("Can not find localSession.");
+        }
     }
     if (remoteSessionDict[ID]) {
-        delete remoteSessionDict[ID];
+        console.log("Del session pair triggered from Local");
+        var remoteID = remoteSessionDict[ID].id;
+        if (localSessionDict[remoteID]) {
+            delete localSessionDict[remoteID];
+            delete remoteSessionDict[ID];
+        }
+        else {
+            console.log("Can not find remoteSession.");
+        }
     }
+    dumpPairs();
 }
 exports.breakSessionPair = breakSessionPair;

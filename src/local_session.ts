@@ -4,7 +4,7 @@ import { genUniqueId, localID2RemoteSess, breakSessionPair } from "./molo_client
 import { MoloSocket } from "./lib/molo_socket";
 
 export class LocalSession extends EventEmitter {
-    private id: string = genUniqueId();
+    private _id: string = genUniqueId();
     private host: string;
     private port: number;
     private client?: MoloSocket;
@@ -29,16 +29,14 @@ export class LocalSession extends EventEmitter {
             }
         });
         this.client.on("end", () => {
-            console.log("LocalSession onDisconnect");
-            const remoteSession = localID2RemoteSess(this.id);
+            const remoteSession = localID2RemoteSess(this._id);
             if (remoteSession) {
                 remoteSession.sockClose();
-                breakSessionPair(this.id);
+                breakSessionPair(this._id);
             }
         });
         this.client.on("connect", () => {
-            this.emit("add", this.id, this);
-            this.emit("connect");
+            this.emit("connect", this._id, this);
         });
         this.client.connect();
     }
@@ -49,12 +47,21 @@ export class LocalSession extends EventEmitter {
     }
 
     private processTransparencyPack(buf: Buffer) {
-        const remoteSession = localID2RemoteSess(this.id);
+        const remoteSession = localID2RemoteSess(this._id);
         if (!remoteSession) {
             console.log('processTransparencyPack() remoteSession session not found');
             this.sockClose();
             return;
         }
         remoteSession.sendRaw(buf);
+    }
+
+    public dumpInfo() {
+        if (this.client)
+            return `LocalSession(${this._id}):  TransMode(${this.client.getTransparency()})`;
+    }
+
+    public get id() {
+        return this._id;
     }
 }

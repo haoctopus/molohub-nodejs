@@ -111,4 +111,8 @@ export class MoloSocket extends EventEmitter {
     public setTransparency(enable: boolean) {
         this.transparency = enable;
     }
+
+    public getTransparency() {
+        return this.transparency;
+    }
 }

@@ -11,7 +11,7 @@ export class RemoteSession extends EventEmitter {
     private rport: number;
     private lhost: string;
     private lport: number;
-    private id: string = genUniqueId();
+    private _id: string = genUniqueId();
     /** Socket connect to remote */
     private client?: MoloSocket;
 
@@ -43,16 +43,14 @@ export class RemoteSession extends EventEmitter {
             if (data) {
                 this.processJsonPack(data, rawData);
             } else {
-                console.log("remote rece raw");
                 this.processTransparencyPack(rawData);
             }
         });
         this.client.on("end", () => {
-            console.log("RemoteSession onDisconnect");
-            const localSession = remoteID2LocalSess(this.id);
+            const localSession = remoteID2LocalSess(this._id);
             if (localSession) {
                 localSession.sockClose();
-                breakSessionPair(this.id);
+                breakSessionPair(this._id);
             }
         });
     }
@@ -74,25 +72,32 @@ export class RemoteSession extends EventEmitter {
 
     private onStartProxy(rawData: Buffer) {
         const local = new LocalSession(this.lhost, this.lport);
-        local.on("add", (localID: string, localSess: LocalSession) => {
-            this.emit("add", localID, localSess, this.id, this);
-        });
-        local.on("connect", () => {
+        local.on("connect", (localID: string, localSess: LocalSession) => {
             if (this.client) {
                 this.client.setTransparency(true);
             }
+            this.emit("add", localID, localSess, this._id, this);
             this.processTransparencyPack(rawData);
         });
         local.sockConnect();
     }
 
     private processTransparencyPack(buf: Buffer) {
-        const localSession = remoteID2LocalSess(this.id);
+        const localSession = remoteID2LocalSess(this._id);
         if (!localSession) {
             console.log('processTransparencyPack() localsession session not found');
             this.sockClose();
             return;
         }
         localSession.sendRaw(buf);
+    }
+
+    public dumpInfo() {
+        if (this.client)
+            return `RemoteSession(${this._id}): TransMode(${this.client.getTransparency()})`;
+    }
+
+    public get id() {
+        return this._id;
     }
 }

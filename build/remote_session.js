@@ -21,7 +21,7 @@ var RemoteSession = /** @class */ (function (_super) {
     __extends(RemoteSession, _super);
     function RemoteSession(clientid, rhost, rport, lhost, lport) {
         var _this = _super.call(this) || this;
-        _this.id = molo_client_app_1.genUniqueId();
+        _this._id = molo_client_app_1.genUniqueId();
         _this.clientid = clientid;
         _this.rhost = rhost;
         _this.rport = rport;
@@ -50,16 +50,14 @@ var RemoteSession = /** @class */ (function (_super) {
                 _this.processJsonPack(data, rawData);
             }
             else {
-                console.log("remote rece raw");
                 _this.processTransparencyPack(rawData);
             }
         });
         this.client.on("end", function () {
-            console.log("RemoteSession onDisconnect");
-            var localSession = molo_client_app_1.remoteID2LocalSess(_this.id);
+            var localSession = molo_client_app_1.remoteID2LocalSess(_this._id);
             if (localSession) {
                 localSession.sockClose();
-                molo_client_app_1.breakSessionPair(_this.id);
+                molo_client_app_1.breakSessionPair(_this._id);
             }
         });
     };
@@ -78,19 +76,17 @@ var RemoteSession = /** @class */ (function (_super) {
     RemoteSession.prototype.onStartProxy = function (rawData) {
         var _this = this;
         var local = new local_session_1.LocalSession(this.lhost, this.lport);
-        local.on("add", function (localID, localSess) {
-            _this.emit("add", localID, localSess, _this.id, _this);
-        });
-        local.on("connect", function () {
+        local.on("connect", function (localID, localSess) {
             if (_this.client) {
                 _this.client.setTransparency(true);
             }
+            _this.emit("add", localID, localSess, _this._id, _this);
             _this.processTransparencyPack(rawData);
         });
         local.sockConnect();
     };
     RemoteSession.prototype.processTransparencyPack = function (buf) {
-        var localSession = molo_client_app_1.remoteID2LocalSess(this.id);
+        var localSession = molo_client_app_1.remoteID2LocalSess(this._id);
         if (!localSession) {
             console.log('processTransparencyPack() localsession session not found');
             this.sockClose();
@@ -98,6 +94,17 @@ var RemoteSession = /** @class */ (function (_super) {
         }
         localSession.sendRaw(buf);
     };
+    RemoteSession.prototype.dumpInfo = function () {
+        if (this.client)
+            return "RemoteSession(" + this._id + "): TransMode(" + this.client.getTransparency() + ")";
+    };
+    Object.defineProperty(RemoteSession.prototype, "id", {
+        get: function () {
+            return this._id;
+        },
+        enumerable: true,
+        configurable: true
+    });
     return RemoteSession;
 }(events_1.EventEmitter));
 exports.RemoteSession = RemoteSession;

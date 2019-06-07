@@ -20,7 +20,7 @@ var LocalSession = /** @class */ (function (_super) {
     __extends(LocalSession, _super);
     function LocalSession(host, port) {
         var _this = _super.call(this) || this;
-        _this.id = molo_client_app_1.genUniqueId();
+        _this._id = molo_client_app_1.genUniqueId();
         _this.host = host;
         _this.port = port;
         return _this;
@@ -39,16 +39,14 @@ var LocalSession = /** @class */ (function (_super) {
             }
         });
         this.client.on("end", function () {
-            console.log("LocalSession onDisconnect");
-            var remoteSession = molo_client_app_1.localID2RemoteSess(_this.id);
+            var remoteSession = molo_client_app_1.localID2RemoteSess(_this._id);
             if (remoteSession) {
                 remoteSession.sockClose();
-                molo_client_app_1.breakSessionPair(_this.id);
+                molo_client_app_1.breakSessionPair(_this._id);
             }
         });
         this.client.on("connect", function () {
-            _this.emit("add", _this.id, _this);
-            _this.emit("connect");
+            _this.emit("connect", _this._id, _this);
         });
         this.client.connect();
     };
@@ -57,7 +55,7 @@ var LocalSession = /** @class */ (function (_super) {
             this.client.destroy();
     };
     LocalSession.prototype.processTransparencyPack = function (buf) {
-        var remoteSession = molo_client_app_1.localID2RemoteSess(this.id);
+        var remoteSession = molo_client_app_1.localID2RemoteSess(this._id);
         if (!remoteSession) {
             console.log('processTransparencyPack() remoteSession session not found');
             this.sockClose();
@@ -65,6 +63,17 @@ var LocalSession = /** @class */ (function (_super) {
         }
         remoteSession.sendRaw(buf);
     };
+    LocalSession.prototype.dumpInfo = function () {
+        if (this.client)
+            return "LocalSession(" + this._id + "):  TransMode(" + this.client.getTransparency() + ")";
+    };
+    Object.defineProperty(LocalSession.prototype, "id", {
+        get: function () {
+            return this._id;
+        },
+        enumerable: true,
+        configurable: true
+    });
     return LocalSession;
 }(events_1.EventEmitter));
 exports.LocalSession = LocalSession;

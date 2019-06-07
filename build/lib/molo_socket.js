@@ -125,6 +125,9 @@ var MoloSocket = /** @class */ (function (_super) {
     MoloSocket.prototype.setTransparency = function (enable) {
         this.transparency = enable;
     };
+    MoloSocket.prototype.getTransparency = function () {
+        return this.transparency;
+    };
     return MoloSocket;
 }(events_1.EventEmitter));
 exports.MoloSocket = MoloSocket;
