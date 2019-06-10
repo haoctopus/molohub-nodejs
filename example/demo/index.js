@@ -6,4 +6,7 @@ var app = new molo.App(client);
 client.on("newSeed", (seed) => {
     console.log("new seed got " + seed);
 })
+client.on("newTunnel", (onlineConfig) => {
+    console.log(`OnlineConfig: ${JSON.stringify(onlineConfig)}`);
+})
 app.runReverseProxy();

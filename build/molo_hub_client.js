@@ -101,7 +101,6 @@ var MolohubClient = /** @class */ (function (_super) {
         }, 5000);
     };
     MolohubClient.prototype.processJsonPack = function (jdata) {
-        console.log('processJsonPack: ' + JSON.stringify(jdata));
         var protocolType = jdata['Type'];
         if (protocolType == 'AuthResp')
             this.onAuthResp(jdata);
@@ -147,6 +146,7 @@ var MolohubClient = /** @class */ (function (_super) {
         //online config, such as markdown template
         var onlineConfig = jdata['OnlineConfig'];
         //TODO: process markdown template stuff
+        this.emit("newTunnel", onlineConfig);
         this.onBindStatus(jdata);
     };
     MolohubClient.prototype.onBindStatus = function (jdata) {

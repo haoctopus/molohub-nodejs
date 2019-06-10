@@ -98,8 +98,6 @@ export class MolohubClient extends EventEmitter {
     }
 
     private processJsonPack(jdata: MoloTcpBodyData) {
-        console.log('processJsonPack: ' + JSON.stringify(jdata));
-
         const protocolType = jdata['Type'];
         if (protocolType == 'AuthResp')
             this.onAuthResp(jdata);
@@ -148,7 +146,7 @@ export class MolohubClient extends EventEmitter {
 
         //online config, such as markdown template
         const onlineConfig = jdata['OnlineConfig'];
-        //TODO: process markdown template stuff
+        this.emit("newTunnel", onlineConfig);
 
         this.onBindStatus(jdata);
     }
