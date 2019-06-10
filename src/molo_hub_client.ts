@@ -155,6 +155,7 @@ export class MolohubClient extends EventEmitter {
         const payload = jdata['Payload']
         this.clientStatus = payload['Status'];
         payload['token'] = this.token;
+        this.emit("updateStatus", this.clientStatus);
         //TODO update client status to ui by markdown
     }
 

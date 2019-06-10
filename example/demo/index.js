@@ -9,4 +9,7 @@ client.on("newSeed", (seed) => {
 client.on("newTunnel", (onlineConfig) => {
     console.log(`OnlineConfig: ${JSON.stringify(onlineConfig)}`);
 })
+client.on("updateStatus", (status) => {
+    console.log(`Update status: ${status}`);
+});
 app.runReverseProxy();

@@ -145,7 +145,6 @@ var MolohubClient = /** @class */ (function (_super) {
         console.log('!!!login succeed clientid:' + this.clientid + " token:" + this.token);
         //online config, such as markdown template
         var onlineConfig = jdata['OnlineConfig'];
-        //TODO: process markdown template stuff
         this.emit("newTunnel", onlineConfig);
         this.onBindStatus(jdata);
     };
@@ -153,6 +152,7 @@ var MolohubClient = /** @class */ (function (_super) {
         var payload = jdata['Payload'];
         this.clientStatus = payload['Status'];
         payload['token'] = this.token;
+        this.emit("updateStatus", this.clientStatus);
         //TODO update client status to ui by markdown
     };
     MolohubClient.prototype.onUnBindAuth = function () {

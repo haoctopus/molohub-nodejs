@@ -54,7 +54,6 @@ var MoloSocket = /** @class */ (function (_super) {
         }
     };
     MoloSocket.prototype.send = function (dictData) {
-        console.log(this.name + ' sendDickPack body: ' + JSON.stringify(dictData));
         var body = molo_tcp_pack_1.generatorTcpBuffer(dictData);
         this.sendRaw(body);
     };

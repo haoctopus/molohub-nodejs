@@ -39,7 +39,6 @@ export class MoloSocket extends EventEmitter {
     }
 
     public send(dictData: Record<string, any>) {
-        console.log(this.name + ' sendDickPack body: ' + JSON.stringify(dictData));
         const body = generatorTcpBuffer(dictData);
         this.sendRaw(body);
     }
