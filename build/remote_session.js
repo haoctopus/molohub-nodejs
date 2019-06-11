@@ -33,6 +33,13 @@ var RemoteSession = /** @class */ (function (_super) {
         if (this.client)
             this.client.sendRaw(rawData);
     };
+    RemoteSession.prototype.onDisconnect = function () {
+        var localSession = molo_client_app_1.remoteID2LocalSess(this._id);
+        if (localSession) {
+            localSession.sockClose();
+            molo_client_app_1.breakSessionPair(this._id);
+        }
+    };
     RemoteSession.prototype.sockConnect = function () {
         var _this = this;
         this.client = new molo_socket_1.MoloSocket(this.rhost, this.rport, "RemoteSession");
@@ -53,12 +60,10 @@ var RemoteSession = /** @class */ (function (_super) {
                 _this.processTransparencyPack(rawData);
             }
         });
-        this.client.on("end", function () {
-            var localSession = molo_client_app_1.remoteID2LocalSess(_this._id);
-            if (localSession) {
-                localSession.sockClose();
-                molo_client_app_1.breakSessionPair(_this._id);
-            }
+        this.client.on("end", this.onDisconnect.bind(this));
+        this.client.on("error", function () {
+            console.log('remote sesion sock error!!');
+            _this.onDisconnect();
         });
     };
     RemoteSession.prototype.sockClose = function () {

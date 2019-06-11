@@ -11,6 +11,10 @@ const CLIENT_STATUS_BINDED = "binded"
 
 type ClientStatusType = "unbinded" | "binded";
 
+const CONNECTE_STATUS_DISCONNECT = 100
+const CONNECTE_STATUS_CONNECTING = 101
+const CONNECTE_STATUS_CONNECTED = 102
+
 export class MolohubClient {
     private rhost: string;
     private rport: number;
@@ -21,6 +25,7 @@ export class MolohubClient {
     private clientid: string = "";
     private clientStatus: ClientStatusType = CLIENT_STATUS_BINDED;
     private token: string = "";
+    private connectStatus: number = CONNECTE_STATUS_DISCONNECT;
 
     public constructor(rhost: string, rport: number, lhost: string, lport: number) {
         this.rhost = rhost;
@@ -31,19 +36,17 @@ export class MolohubClient {
 
     private clear() {
         this.clientStatus = CLIENT_STATUS_UNBINDED;
+        this.connectStatus = CONNECTE_STATUS_DISCONNECT;
     }
 
     public sockConnect() {
         this.clear();
         this.client = new MoloSocket(this.rhost, this.rport, "Client");
         this.client.connect()
+        this.connectStatus = CONNECTE_STATUS_CONNECTING;
         this.client.on("connect", () => {
             console.log("on client connect");
-
-            setInterval(() => {
-                this.sendPing();
-            }, 5000);
-
+            this.connectStatus = CONNECTE_STATUS_CONNECTED;
             const bodyData: Record<string, any> = {}
             bodyData['Type'] = 'Auth';
             bodyData['Payload'] = {};
@@ -64,6 +67,20 @@ export class MolohubClient {
             console.log('onDisconnect');
             this.clear();
         });
+
+        this.client.on('error', () => {
+            console.log("sock Error:!!!");
+            this.clear();
+        });
+        
+        setInterval(() => {
+            this.sendPing();
+            //reconnect server when disconnected.
+            if (this.connectStatus == CONNECTE_STATUS_DISCONNECT) {
+                console.log(`reconnecting...`);
+                this.sockConnect();
+            }   
+        }, 5000);
     }
 
     private processJsonPack(jdata: MoloTcpBodyData) {
@@ -83,6 +100,10 @@ export class MolohubClient {
     }
 
     public sendPing() {
+        
+        if (this.connectStatus != CONNECTE_STATUS_CONNECTED)
+            return;
+
         const payload: Record<string, any> = {};
         payload['Token'] = this.token;
         payload['Status'] = this.clientStatus;

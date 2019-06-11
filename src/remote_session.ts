@@ -29,6 +29,14 @@ export class RemoteSession extends EventEmitter {
         if (this.client) this.client.sendRaw(rawData);
     }
 
+    public  onDisconnect() {
+        const localSession = remoteID2LocalSess(this._id);
+        if (localSession) {
+            localSession.sockClose();
+            breakSessionPair(this._id);
+        }
+    }
+
     public sockConnect() {
         this.client = new MoloSocket(this.rhost, this.rport, "RemoteSession");
         this.client.connect()
@@ -46,13 +54,15 @@ export class RemoteSession extends EventEmitter {
                 this.processTransparencyPack(rawData);
             }
         });
-        this.client.on("end", () => {
-            const localSession = remoteID2LocalSess(this._id);
-            if (localSession) {
-                localSession.sockClose();
-                breakSessionPair(this._id);
-            }
+
+        
+        this.client.on("end", this.onDisconnect.bind(this));
+
+        this.client.on("error", () => {
+            console.log('remote sesion sock error!!');
+            this.onDisconnect();
         });
+
     }
 
     public sockClose() {

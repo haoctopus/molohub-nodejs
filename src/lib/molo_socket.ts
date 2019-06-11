@@ -96,6 +96,7 @@ export class MoloSocket extends EventEmitter {
         });
         this.client.on('error', (err) => {
             console.log(`${this.name} Error: ${err.message}`);
+            this.emit("error");
         });
         this.client.connect(this.port, this.host);
     }

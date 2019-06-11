@@ -14,11 +14,15 @@ var remote_session_1 = require("./remote_session");
 var molo_socket_1 = require("./lib/molo_socket");
 var CLIENT_STATUS_UNBINDED = "unbinded";
 var CLIENT_STATUS_BINDED = "binded";
+var CONNECTE_STATUS_DISCONNECT = 100;
+var CONNECTE_STATUS_CONNECTING = 101;
+var CONNECTE_STATUS_CONNECTED = 102;
 var MolohubClient = /** @class */ (function () {
     function MolohubClient(rhost, rport, lhost, lport) {
         this.clientid = "";
         this.clientStatus = CLIENT_STATUS_BINDED;
         this.token = "";
+        this.connectStatus = CONNECTE_STATUS_DISCONNECT;
         this.rhost = rhost;
         this.rport = rport;
         this.lhost = lhost;
@@ -26,17 +30,17 @@ var MolohubClient = /** @class */ (function () {
     }
     MolohubClient.prototype.clear = function () {
         this.clientStatus = CLIENT_STATUS_UNBINDED;
+        this.connectStatus = CONNECTE_STATUS_DISCONNECT;
     };
     MolohubClient.prototype.sockConnect = function () {
         var _this = this;
         this.clear();
         this.client = new molo_socket_1.MoloSocket(this.rhost, this.rport, "Client");
         this.client.connect();
+        this.connectStatus = CONNECTE_STATUS_CONNECTING;
         this.client.on("connect", function () {
             console.log("on client connect");
-            setInterval(function () {
-                _this.sendPing();
-            }, 5000);
+            _this.connectStatus = CONNECTE_STATUS_CONNECTED;
             var bodyData = {};
             bodyData['Type'] = 'Auth';
             bodyData['Payload'] = {};
@@ -56,6 +60,18 @@ var MolohubClient = /** @class */ (function () {
             console.log('onDisconnect');
             _this.clear();
         });
+        this.client.on('error', function () {
+            console.log("sock Error:!!!");
+            _this.clear();
+        });
+        setInterval(function () {
+            _this.sendPing();
+            //reconnect server when disconnected.
+            if (_this.connectStatus == CONNECTE_STATUS_DISCONNECT) {
+                console.log("reconnecting...");
+                _this.sockConnect();
+            }
+        }, 5000);
     };
     MolohubClient.prototype.processJsonPack = function (jdata) {
         console.log('processJsonPack: ' + JSON.stringify(jdata));
@@ -72,6 +88,8 @@ var MolohubClient = /** @class */ (function () {
             this.onReqProxy();
     };
     MolohubClient.prototype.sendPing = function () {
+        if (this.connectStatus != CONNECTE_STATUS_CONNECTED)
+            return;
         var payload = {};
         payload['Token'] = this.token;
         payload['Status'] = this.clientStatus;

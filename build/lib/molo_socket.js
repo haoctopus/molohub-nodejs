@@ -112,6 +112,7 @@ var MoloSocket = /** @class */ (function (_super) {
         });
         this.client.on('error', function (err) {
             console.log(_this.name + " Error: " + err.message);
+            _this.emit("error");
         });
         this.client.connect(this.port, this.host);
     };
