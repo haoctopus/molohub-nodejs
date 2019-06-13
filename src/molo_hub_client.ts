@@ -5,6 +5,7 @@ import { newSessionPair } from "./molo_client_app"
 import { RemoteSession } from "./remote_session";
 import { LocalSession } from "./local_session";
 import { MoloSocket } from "./lib/molo_socket";
+import { EventEmitter } from "events";
 
 const CLIENT_STATUS_UNBINDED = "unbinded"
 const CLIENT_STATUS_BINDED = "binded"
@@ -15,7 +16,7 @@ const CONNECTE_STATUS_DISCONNECT = 100
 const CONNECTE_STATUS_CONNECTING = 101
 const CONNECTE_STATUS_CONNECTED = 102
 
-export class MolohubClient {
+export class MolohubClient extends EventEmitter {
     private rhost: string;
     private rport: number;
     private lhost: string;
@@ -26,17 +27,25 @@ export class MolohubClient {
     private clientStatus: ClientStatusType = CLIENT_STATUS_BINDED;
     private token: string = "";
     private connectStatus: number = CONNECTE_STATUS_DISCONNECT;
+    private localSeed?: string;
 
-    public constructor(rhost: string, rport: number, lhost: string, lport: number) {
+    public constructor(rhost: string, rport: number, lhost: string, lport: number, seed?: string) {
+        super();
+
         this.rhost = rhost;
         this.rport = rport;
         this.lhost = lhost;
         this.lport = lport;
+        this.localSeed = seed;
     }
 
     private clear() {
         this.clientStatus = CLIENT_STATUS_UNBINDED;
         this.connectStatus = CONNECTE_STATUS_DISCONNECT;
+    }
+
+    private newLocalSeedHandler(seed: string) {
+        this.emit("newSeed", seed);
     }
 
     public sockConnect() {
@@ -55,8 +64,13 @@ export class MolohubClient {
             bodyData['Payload']['App'] = 'MolohubNodeJs';
             bodyData['Payload']['MacAddr'] = 'testMac'; //TODO:
     
-            //TODO: fisrt time generate random id, then save it, after that, use saved localseed
-            bodyData['Payload']['LocalSeed'] = Math.random().toString(36).substr(2);
+            if (this.localSeed) {
+                bodyData['Payload']['LocalSeed'] = this.localSeed;
+            } else {
+                const seed = Math.random().toString(36).substr(2);
+                bodyData['Payload']['LocalSeed'] = seed;
+                this.newLocalSeedHandler(seed);
+            }
             if (this.client) this.client.send(bodyData);
         });
 
@@ -84,8 +98,6 @@ export class MolohubClient {
     }
 
     private processJsonPack(jdata: MoloTcpBodyData) {
-        console.log('processJsonPack: ' + JSON.stringify(jdata));
-
         const protocolType = jdata['Type'];
         if (protocolType == 'AuthResp')
             this.onAuthResp(jdata);
@@ -134,7 +146,7 @@ export class MolohubClient {
 
         //online config, such as markdown template
         const onlineConfig = jdata['OnlineConfig'];
-        //TODO: process markdown template stuff
+        this.emit("newTunnel", onlineConfig);
 
         this.onBindStatus(jdata);
     }
@@ -143,6 +155,7 @@ export class MolohubClient {
         const payload = jdata['Payload']
         this.clientStatus = payload['Status'];
         payload['token'] = this.token;
+        this.emit("updateStatus", this.clientStatus);
         //TODO update client status to ui by markdown
     }
 

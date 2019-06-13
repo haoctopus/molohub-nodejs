@@ -1,4 +1,17 @@
 "use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 var __importStar = (this && this.__importStar) || function (mod) {
     if (mod && mod.__esModule) return mod;
     var result = {};
@@ -12,25 +25,33 @@ var process = __importStar(require("process"));
 var molo_client_app_1 = require("./molo_client_app");
 var remote_session_1 = require("./remote_session");
 var molo_socket_1 = require("./lib/molo_socket");
+var events_1 = require("events");
 var CLIENT_STATUS_UNBINDED = "unbinded";
 var CLIENT_STATUS_BINDED = "binded";
 var CONNECTE_STATUS_DISCONNECT = 100;
 var CONNECTE_STATUS_CONNECTING = 101;
 var CONNECTE_STATUS_CONNECTED = 102;
-var MolohubClient = /** @class */ (function () {
-    function MolohubClient(rhost, rport, lhost, lport) {
-        this.clientid = "";
-        this.clientStatus = CLIENT_STATUS_BINDED;
-        this.token = "";
-        this.connectStatus = CONNECTE_STATUS_DISCONNECT;
-        this.rhost = rhost;
-        this.rport = rport;
-        this.lhost = lhost;
-        this.lport = lport;
+var MolohubClient = /** @class */ (function (_super) {
+    __extends(MolohubClient, _super);
+    function MolohubClient(rhost, rport, lhost, lport, seed) {
+        var _this = _super.call(this) || this;
+        _this.clientid = "";
+        _this.clientStatus = CLIENT_STATUS_BINDED;
+        _this.token = "";
+        _this.connectStatus = CONNECTE_STATUS_DISCONNECT;
+        _this.rhost = rhost;
+        _this.rport = rport;
+        _this.lhost = lhost;
+        _this.lport = lport;
+        _this.localSeed = seed;
+        return _this;
     }
     MolohubClient.prototype.clear = function () {
         this.clientStatus = CLIENT_STATUS_UNBINDED;
         this.connectStatus = CONNECTE_STATUS_DISCONNECT;
+    };
+    MolohubClient.prototype.newLocalSeedHandler = function (seed) {
+        this.emit("newSeed", seed);
     };
     MolohubClient.prototype.sockConnect = function () {
         var _this = this;
@@ -48,8 +69,14 @@ var MolohubClient = /** @class */ (function () {
             bodyData['Payload']['PyVersion'] = process.version; //TODO: node version
             bodyData['Payload']['App'] = 'MolohubNodeJs';
             bodyData['Payload']['MacAddr'] = 'testMac'; //TODO:
-            //TODO: fisrt time generate random id, then save it, after that, use saved localseed
-            bodyData['Payload']['LocalSeed'] = Math.random().toString(36).substr(2);
+            if (_this.localSeed) {
+                bodyData['Payload']['LocalSeed'] = _this.localSeed;
+            }
+            else {
+                var seed = Math.random().toString(36).substr(2);
+                bodyData['Payload']['LocalSeed'] = seed;
+                _this.newLocalSeedHandler(seed);
+            }
             if (_this.client)
                 _this.client.send(bodyData);
         });
@@ -74,7 +101,6 @@ var MolohubClient = /** @class */ (function () {
         }, 5000);
     };
     MolohubClient.prototype.processJsonPack = function (jdata) {
-        console.log('processJsonPack: ' + JSON.stringify(jdata));
         var protocolType = jdata['Type'];
         if (protocolType == 'AuthResp')
             this.onAuthResp(jdata);
@@ -119,13 +145,14 @@ var MolohubClient = /** @class */ (function () {
         console.log('!!!login succeed clientid:' + this.clientid + " token:" + this.token);
         //online config, such as markdown template
         var onlineConfig = jdata['OnlineConfig'];
-        //TODO: process markdown template stuff
+        this.emit("newTunnel", onlineConfig);
         this.onBindStatus(jdata);
     };
     MolohubClient.prototype.onBindStatus = function (jdata) {
         var payload = jdata['Payload'];
         this.clientStatus = payload['Status'];
         payload['token'] = this.token;
+        this.emit("updateStatus", this.clientStatus);
         //TODO update client status to ui by markdown
     };
     MolohubClient.prototype.onUnBindAuth = function () {
@@ -148,5 +175,5 @@ var MolohubClient = /** @class */ (function () {
         remote.sockConnect();
     };
     return MolohubClient;
-}());
+}(events_1.EventEmitter));
 exports.MolohubClient = MolohubClient;
