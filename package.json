@@ -1,6 +1,6 @@
 {
   "name": "molohub",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "reverse proxy component for smarthome platform",
   "main": "build/index.js",
   "scripts": {
